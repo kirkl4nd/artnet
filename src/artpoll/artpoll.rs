@@ -42,3 +42,66 @@ impl TryFrom<Vec<u8>> for ArtPoll {
         })
     }
 }
+
+impl ArtPoll {
+    /// Converts the `ArtPoll` struct into a raw packet for UDP transmission.
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut packet = Vec::with_capacity(14); // Fixed size for ArtPoll packets
+
+        // Start with the Art-Net ID
+        packet.extend_from_slice(&self.id);
+
+        // OpCode in little-endian format
+        packet.extend_from_slice(&self.op_code.to_le_bytes());
+
+        // Protocol version, high byte first
+        packet.extend_from_slice(&self.protocol_version.to_be_bytes());
+
+        // TalkToMe and Priority
+        packet.push(self.talk_to_me);
+        packet.push(self.priority);
+
+        packet
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_artpoll_encoding() {
+        let art_poll = ArtPoll {
+            id: *ART_NET_ID,
+            op_code: ART_POLL_OPCODE,
+            protocol_version: 0x0001,
+            talk_to_me: 0b00000010,
+            priority: 0x10,
+        };
+
+        let bytes = art_poll.into_bytes();
+        assert_eq!(bytes[0..8], *ART_NET_ID);
+        assert_eq!(u16::from_le_bytes([bytes[8], bytes[9]]), ART_POLL_OPCODE);
+        assert_eq!(u16::from_be_bytes([bytes[10], bytes[11]]), 0x0001);
+        assert_eq!(bytes[12], 0b00000010);
+        assert_eq!(bytes[13], 0x10);
+    }
+
+    #[test]
+    fn test_artpoll_decoding() {
+        let packet = vec![
+            b'A', b'r', b't', b'-', b'N', b'e', b't', b'\0', // Art-Net ID
+            0x00, 0x20, // OpCode (0x2000 in little endian for ArtPoll)
+            0x00, 0x01, // Protocol Version
+            0b00000010, // TalkToMe
+            0x10, // Priority
+        ];
+
+        let art_poll = ArtPoll::try_from(packet).expect("Decoding failed");
+        assert_eq!(art_poll.id, *ART_NET_ID);
+        assert_eq!(art_poll.op_code, ART_POLL_OPCODE);
+        assert_eq!(art_poll.protocol_version, 0x0001);
+        assert_eq!(art_poll.talk_to_me, 0b00000010);
+        assert_eq!(art_poll.priority, 0x10);
+    }
+}

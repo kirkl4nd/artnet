@@ -139,3 +139,200 @@ impl TryFrom<Vec<u8>> for ArtPollReply {
         })
     }
 }
+
+impl ArtPollReply {
+    /// Converts the `ArtPollReply` struct into a raw packet for UDP transmission.
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut packet = Vec::with_capacity(239); // The spec indicates a fixed size for ArtPollReply packets
+
+        // Start with the Art-Net ID
+        packet.extend_from_slice(&self.id);
+
+        // OpCode in little-endian format
+        packet.extend_from_slice(&self.op_code.to_le_bytes());
+
+        // IP Address
+        packet.extend_from_slice(&self.ip_address.octets());
+
+        // Port Number in big-endian format
+        packet.extend_from_slice(&self.port_number.to_be_bytes());
+
+        // Version Info high and low bytes
+        packet.push(self.vers_info_hi);
+        packet.push(self.vers_info_lo);
+
+        // NetSwitch and SubSwitch
+        packet.push(self.net_switch);
+        packet.push(self.sub_switch);
+
+        // Oem high and low bytes
+        packet.push(self.oem_hi);
+        packet.push(self.oem_lo);
+
+        // Ubea Version
+        packet.push(self.ubea_version);
+
+        // Status1
+        packet.push(self.status1);
+
+        // ESTA Manufacturer in big-endian format
+        packet.extend_from_slice(&self.esta_man.to_be_bytes());
+
+        // Short Name
+        packet.extend_from_slice(&self.short_name);
+
+        // Long Name
+        packet.extend_from_slice(&self.long_name);
+
+        // Node Report
+        packet.extend_from_slice(&self.node_report);
+
+        // Number of Ports in big-endian format
+        packet.extend_from_slice(&self.num_ports.to_be_bytes());
+
+        // Port Types
+        packet.extend_from_slice(&self.port_types);
+
+        // Good Input
+        packet.extend_from_slice(&self.good_input);
+
+        // Good Output
+        packet.extend_from_slice(&self.good_output);
+
+        // SwIn
+        packet.extend_from_slice(&self.sw_in);
+
+        // SwOut
+        packet.extend_from_slice(&self.sw_out);
+
+        // SwVideo, SwMacro, SwRemote
+        packet.push(self.sw_video);
+        packet.push(self.sw_macro);
+        packet.push(self.sw_remote);
+
+        // Fill in Spare1, Spare2, and Spare3 as 0
+        packet.extend_from_slice(&[0; 3]);
+
+        // Style
+        packet.push(self.style);
+
+        // MAC Address
+        packet.extend_from_slice(&self.mac);
+
+        // Bind IP
+        packet.extend_from_slice(&self.bind_ip.octets());
+
+        // BindIndex
+        packet.push(self.bind_index);
+
+        // Status2
+        packet.push(self.status2);
+
+        // Filler
+        packet.extend_from_slice(&self.filler);
+
+        packet
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::from_utf8;
+
+    #[test]
+    fn test_artpollreply_encoding() {
+        let art_poll_reply = ArtPollReply {
+            id: *ART_NET_ID,
+            op_code: ART_POLL_REPLY_OPCODE,
+            ip_address: Ipv4Addr::new(192, 168, 1, 50),
+            port_number: 6454,
+            vers_info_hi: 0,
+            vers_info_lo: 14,
+            net_switch: 0,
+            sub_switch: 0,
+            oem_hi: 0xFF,
+            oem_lo: 0xFF,
+            ubea_version: 0,
+            status1: 0,
+            esta_man: 0x20AC,
+            short_name: *b"Test Node\0\0\0\0\0\0\0\0\0\0",
+            long_name: *b"Example Long Name for a Test Node\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            node_report: *b"Everything is running smoothly\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            num_ports: 2,
+            port_types: [0x80, 0x80, 0, 0],
+            good_input: [0, 0, 0, 0],
+            good_output: [0, 0, 0, 0],
+            sw_in: [0, 0, 0, 0],
+            sw_out: [0, 0, 0, 0],
+            sw_video: 0,
+            sw_macro: 0,
+            sw_remote: 0,
+            style: 0,
+            mac: [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01],
+            bind_ip: Ipv4Addr::new(192, 168, 1, 51),
+            bind_index: 1,
+            status2: 0,
+            filler: [0; 26],
+        };
+
+        let bytes = art_poll_reply.into_bytes();
+
+        // Basic structure assertions
+        assert_eq!(&bytes[0..8], ART_NET_ID);
+        assert_eq!(u16::from_be_bytes([bytes[8], bytes[9]]), ART_POLL_REPLY_OPCODE);
+        assert_eq!(Ipv4Addr::new(bytes[10], bytes[11], bytes[12], bytes[13]), art_poll_reply.ip_address);
+        assert_eq!(u16::from_be_bytes([bytes[14], bytes[15]]), art_poll_reply.port_number);
+        assert_eq!(bytes[16], art_poll_reply.vers_info_hi);
+        assert_eq!(bytes[17], art_poll_reply.vers_info_lo);
+        // Continue with further assertions for all fields to ensure correct encoding
+    }
+
+    #[test]
+    fn test_artpollreply_decoding() {
+        let packet = vec![
+            b'A', b'r', b't', b'-', b'N', b'e', b't', b'\0', // Art-Net ID
+            0x21, 0x00, // OpCode (0x2100 in big-endian for ArtPollReply)
+            192, 168, 1, 50, // IP Address
+            0x19, 0x26, // Port Number (6454 in big-endian)
+            0, 14, // Version Info
+            0, 0, // NetSwitch, SubSwitch
+            0xFF, 0xFF, // OEM Hi/Lo
+            0, // UBEA Version
+            0, // Status1
+            0x20, 0xAC, // ESTA Manufacturer
+            *b"Test Node\0\0\0\0\0\0\0\0\0\0", // Short Name
+            *b"Example Long Name for a Test Node\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", // Long Name
+            *b"Everything is running smoothly\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", // Node Report
+            0x00, 0x02, // Num Ports
+            0x80, 0x80, 0x00, 0x00, // Port Types
+            0x00, 0x00, 0x00, 0x00, // Good Input
+            0x00, 0x00, 0x00, 0x00, // Good Output
+            0x00, 0x00, 0x00, 0x00, // SwIn
+            0x00, 0x00, 0x00, 0x00, // SwOut
+            0x00, // SwVideo
+            0x00, // SwMacro
+            0x00, // SwRemote
+            0, // Style
+            0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, // MAC Address
+            192, 168, 1, 51, // Bind IP
+            1, // BindIndex
+            0, // Status2
+            [0; 26].to_vec(), // Filler
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        let art_poll_reply = ArtPollReply::try_from(packet).expect("Decoding failed");
+
+        // Verify each field
+        assert_eq!(art_poll_reply.id, *ART_NET_ID);
+        assert_eq!(art_poll_reply.op_code, ART_POLL_REPLY_OPCODE);
+        assert_eq!(art_poll_reply.ip_address, Ipv4Addr::new(192, 168, 1, 50));
+        assert_eq!(art_poll_reply.port_number, 6454);
+        // Continue with further assertions for all fields to ensure correct decoding
+    }
+}
