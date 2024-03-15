@@ -1,6 +1,6 @@
 use std::sync::mpsc::Receiver;
 
-use crate::{dmx512::dmx512::Dmx512, handlers::{artnet_to_dmx::create_artdmx_to_dmx_handler, artpoll::create_artpoll_responder, network::{self, create_network_handler}}};
+use crate::{packets::dmx512::Dmx512, handlers::{artnet_to_dmx::create_artdmx_to_dmx_handler, artpoll::create_artpoll_responder, network::create_network_handler}};
 
 pub fn create_artnet_to_dmx_node(ip_and_port: &str) -> Receiver<Dmx512> {
 
